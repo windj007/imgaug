@@ -1089,3 +1089,35 @@ def Crop(px=None, percent=None, keep_size=True, sample_independently=True, name=
         name=name, deterministic=deterministic, random_state=random_state
     )
     return aug
+
+
+class Window(Augmenter):
+    def __init__(self, window, name=None, deterministic=False, random_state=None):
+        super(Window, self).__init__(name=name, deterministic=deterministic, random_state=random_state)
+        self.window = tuple(map(int, window))
+        assert len(window) == 2
+
+    def _augment_images(self, images, random_state, parents, hooks):
+        result = []
+        height, width = self.window
+        for i in sm.xrange(len(images)):
+            cur_shape = images[i].shape
+            y = random_state.randint(0, cur_shape[0] - height)
+            x = random_state.randint(0, cur_shape[1] - width)
+            result.append(images[i][y:y+height, x:x+width])
+        return np.stack(result)
+
+    def _augment_keypoints(self, keypoints_on_images, random_state, parents, hooks):
+        result = []
+        height, width = self.window
+        for i in sm.xrange(len(images)):
+            cur_shape = images[i].shape
+            y = random_state.randint(0, cur_shape[0] - height)
+            x = random_state.randint(0, cur_shape[1] - width)
+            shifted = keypoints_on_image.shift(x=-x, y=-y)
+            shifted.shape = self.window
+            result.append(shifted)
+        return result
+
+    def get_parameters(self):
+        return [self.window]
