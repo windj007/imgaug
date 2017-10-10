@@ -1588,6 +1588,9 @@ class Batch(object):
         The images to
         augment.
 
+    heatmaps : Data type same as images.
+        Heatmaps for input images.
+
     keypoints : None or list of KeypointOnImage
         The keypoints to
         augment.
@@ -1600,9 +1603,11 @@ class Batch(object):
         not be returned in the original order, making this information useful.
 
     """
-    def __init__(self, images=None, keypoints=None, data=None):
+    def __init__(self, images=None, heatmaps=None, keypoints=None, data=None):
         self.images = images
         self.images_aug = None
+        self.heatmaps = heatmaps
+        self.heatmaps_aug = None
         self.keypoints = keypoints
         self.keypoints_aug = None
         self.data = data
@@ -1719,8 +1724,12 @@ class BackgroundAugmenter(object):
         Number of background workers to spawn. If auto, it will be set
         to C-1, where C is the number of CPU cores.
 
+    heatmaps_hooks : HooksImages or None
+        Hooks to control, which augmenters to activate for heatmaps.
+        Useful to turn noize off, for example.
+
     """
-    def __init__(self, batch_loader, augseq, queue_size=50, nb_workers="auto"):
+    def __init__(self, batch_loader, augseq, queue_size=50, nb_workers="auto", heatmaps_hooks=None):
         assert queue_size > 0
         self.augseq = augseq
         self.source_finished_signals = batch_loader.finished_signals
@@ -1741,8 +1750,10 @@ class BackgroundAugmenter(object):
         self.nb_workers = nb_workers
         self.workers = []
         self.nb_workers_finished = 0
+        self.heatmaps_hooks = heatmaps_hooks
 
         self.augment_images = True
+        self.augment_heatmaps = True
         self.augment_keypoints = True
 
         seeds = current_random_state().randint(0, 10**6, size=(nb_workers,))
@@ -1795,12 +1806,16 @@ class BackgroundAugmenter(object):
                 batch = pickle.loads(batch_str)
                 # augment the batch
                 batch_augment_images = batch.images is not None and self.augment_images
+                batch_augment_heatmaps = batch.heatmaps is not None and self.augment_heatmaps
                 batch_augment_keypoints = batch.keypoints is not None and self.augment_keypoints
 
-                if batch_augment_images and batch_augment_keypoints:
+                if batch_augment_images and (batch_augment_heatmaps or batch_augment_keypoints):
                     augseq_det = augseq.to_deterministic() if not augseq.deterministic else augseq
                     batch.images_aug = augseq_det.augment_images(batch.images)
-                    batch.keypoints_aug = augseq_det.augment_keypoints(batch.keypoints)
+                    if batch_augment_heatmaps:
+                        batch.heatmaps_aug = augseq_det.augment_images(batch.heatmaps, hooks=self.heatmaps_hooks)
+                    if batch_augment_keypoints:
+                        batch.keypoints_aug = augseq_det.augment_keypoints(batch.keypoints)
                 elif batch_augment_images:
                     batch.images_aug = augseq.augment_images(batch.images)
                 elif batch_augment_keypoints:
