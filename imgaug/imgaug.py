@@ -1728,8 +1728,12 @@ class BackgroundAugmenter(object):
         Hooks to control, which augmenters to activate for heatmaps.
         Useful to turn noize off, for example.
 
+    clean_sources : bool
+        Whether to clean contents of Batch.images, Batch.heatmaps and Batch.keypoints
+        Useful to reduce amount of data to be pickled.
+
     """
-    def __init__(self, batch_loader, augseq, queue_size=50, nb_workers="auto", heatmaps_hooks=None):
+    def __init__(self, batch_loader, augseq, queue_size=50, nb_workers="auto", heatmaps_hooks=None, clean_sources=False):
         assert queue_size > 0
         self.augseq = augseq
         self.source_finished_signals = batch_loader.finished_signals
@@ -1751,6 +1755,7 @@ class BackgroundAugmenter(object):
         self.workers = []
         self.nb_workers_finished = 0
         self.heatmaps_hooks = heatmaps_hooks
+        self.clean_sources = clean_sources
 
         self.augment_images = True
         self.augment_heatmaps = True
@@ -1820,6 +1825,11 @@ class BackgroundAugmenter(object):
                     batch.images_aug = augseq.augment_images(batch.images)
                 elif batch_augment_keypoints:
                     batch.keypoints_aug = augseq.augment_keypoints(batch.keypoints)
+
+                if self.clean_sources:
+                    batch.images = None
+                    batch.heatmaps = None
+                    batch.keypoints = None
 
                 # send augmented batch to output queue
                 batch_str = pickle.dumps(batch, protocol=-1)
